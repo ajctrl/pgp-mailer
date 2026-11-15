@@ -36,6 +36,20 @@ The tests in `cmd/pgp-mailer` start the real binary and have it deliver to a tes
 
 ## Running
 
+Pull the published Linux amd64 image:
+
+```sh
+docker pull ghcr.io/ajctrl/pgp-mailer:latest
+```
+
+The [Docker workflow](.github/workflows/docker.yml) tests the service and publishes
+the image on every push to `main`. It can also be run manually from the Actions
+tab on `main`. Images are tagged `latest` and `sha-<full commit SHA>`.
+Authentication uses the workflow's `GITHUB_TOKEN`; no extra secret is needed.
+After the first publication, the package owner must set the package visibility
+to **Public** under GitHub **Packages → pgp-mailer → Package settings** to allow
+pulling without authentication. Repository visibility does not set package visibility.
+
 An example Portainer stack is in [deploy/compose.yaml](deploy/compose.yaml).
 
 - Do not publish ports (no `ports:`); join the same dedicated network as the callers.

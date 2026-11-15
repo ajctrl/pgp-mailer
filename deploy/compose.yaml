@@ -8,8 +8,7 @@
 
 services:
   pgp-mailer:
-    image: pgp-mailer:latest
-    build: ..
+    image: ghcr.io/ajctrl/pgp-mailer:latest
     restart: unless-stopped
     read_only: true
     user: "65532:65532"
