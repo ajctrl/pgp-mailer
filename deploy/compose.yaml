@@ -1,0 +1,68 @@
+# Portainer Stack 用の例。値は環境に合わせて置き換える。
+#
+# - サービスのポートはホストへ公開しない（ports: を書かない）。
+#   Grafana など呼び出し元を同じ専用ネットワーク notify に参加させる。
+# - コンテナは読み取り専用。書き込めるのはキュー用ボリュームだけ。
+# - 秘密情報は Docker secrets（*_FILE）で渡す。secrets のファイルは
+#   コンテナ内の UID 65532 から読める必要がある（例: chmod 0444）。
+
+services:
+  pgp-mailer:
+    image: pgp-mailer:latest
+    build: ..
+    restart: unless-stopped
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [notify]
+    # SIGTERM 後、送信中の SMTP を最大 30 秒待つため、それより長くする。
+    stop_grace_period: 40s
+    environment:
+      PGP_PUBLIC_KEY_BASE64: "<gpg --export <指紋> | base64 -w0 の出力>"
+      PGP_FINGERPRINT: "<主鍵の完全なフィンガープリント（40桁）>"
+      # 緊急失効時のみ: 旧鍵の指紋をカンマ区切りで指定する。
+      # PGP_QUARANTINE_FINGERPRINTS: ""
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: "465"
+      SMTP_TLS_MODE: implicit # または starttls（587 など）
+      SMTP_USERNAME: mailer@example.com
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      MAIL_FROM: mailer@example.com
+      RECEIVER_OPS: ops@example.com
+      API_TOKENS_FILE: /run/secrets/api_tokens
+      GRAFANA_HMAC_SECRET_FILE: /run/secrets/grafana_hmac_secret
+      ADMIN_TOKEN_FILE: /run/secrets/admin_token
+      QUEUE_DIR: /var/lib/pgp-mailer
+      # LISTEN_ADDR: ":8080"   # 既定値
+    secrets:
+      - smtp_password
+      - api_tokens
+      - grafana_hmac_secret
+      - admin_token
+    volumes:
+      # 512 MiB 以上の空きを確保する（bbolt のファイルは削除しても縮まない）。
+      - pgp-mailer-queue:/var/lib/pgp-mailer
+    healthcheck:
+      test: ["CMD", "/pgp-mailer", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  notify:
+    name: notify
+
+volumes:
+  pgp-mailer-queue:
+
+secrets:
+  smtp_password:
+    file: ./secrets/smtp_password
+  api_tokens:
+    file: ./secrets/api_tokens # 例: grafana-以外の名前:32文字以上のトークン,...
+  grafana_hmac_secret:
+    file: ./secrets/grafana_hmac_secret
+  admin_token:
+    file: ./secrets/admin_token

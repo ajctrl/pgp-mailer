@@ -1,0 +1,22 @@
+# ビルド成果物
+/pgp-mailer
+*.exe
+*.test
+*.out
+coverage.*
+
+# キューの DB（ローカル実行時）
+*.db
+
+# Docker secrets の実ファイル（deploy/compose.yaml が参照）
+deploy/secrets/
+
+# 環境変数ファイル
+.env
+.env.*
+
+# エディター・OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
