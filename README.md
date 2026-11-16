@@ -51,6 +51,36 @@ After the first publication, the package owner must set the package visibility
 to **Public** under GitHub **Packages → pgp-mailer → Package settings** to allow
 pulling without authentication. Repository visibility does not set package visibility.
 
+Dependabot checks Go modules (including indirect dependencies), GitHub Actions
+and Docker base images weekly and opens update PRs. Minor and patch updates for
+Go and Actions are grouped; major updates remain separate. PRs run the tests
+and a Docker build. Verified Dependabot patch/minor/major updates are squash-merged
+automatically only after CI succeeds for that exact PR head, then the image
+publication workflow is dispatched. Unclassified updates remain manual.
+CI runs the full test suite with the race detector and requires GnuPG so the
+OpenPGP interoperability checks run. Regression tests also check encryption
+failure handling and reading/updating a frozen queue database written by bbolt
+v1.4.3. The merge workflow never checks out PR code and uses `GITHUB_TOKEN`;
+no additional secret or repository auto-merge setting is needed. Main must require
+the GitHub Actions `test` and `build` checks with strict (up-to-date branch)
+protection. This blocks merges validated against an older main, including races
+between concurrent update PRs. A stale PR must be rebased and pass CI again;
+Dependabot normally rebases conflicting/outdated PRs automatically. Additional
+branch protection requirements still apply. See [Dependabot configuration](.github/dependabot.yml)
+and the [merge workflow](.github/workflows/dependabot-merge.yml).
+
+The initial main protection configuration is tracked in
+[main-protection.json](.github/main-protection.json). For a new repository, apply
+it with an administrator's GitHub CLI credentials:
+
+```sh
+gh api --method PUT repos/OWNER/REPO/branches/main/protection \
+  --input .github/main-protection.json
+```
+
+This command replaces branch protection settings. If protection already exists,
+preserve its other requirements and add strict `test`/`build` checks instead.
+
 An example Portainer stack is in [deploy/compose.yaml](deploy/compose.yaml).
 
 - Do not publish ports (no `ports:`); join the same dedicated network as the callers.

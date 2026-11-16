@@ -1,0 +1,76 @@
+name: Merge Dependabot updates
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      # This privileged workflow never checks out or executes PR code.
+      - name: Verify Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@ffa630c65fa7e0ecfa0625b5ceda64399aea1b36 # v3.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for CI, merge and publish
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The PR workflow may not have been registered when this event starts.
+          run_id=""
+          for attempt in {1..40}; do
+            run_id=$(gh run list --workflow docker.yml --event pull_request \
+              --branch "$HEAD_REF" --limit 20 --json databaseId,headSha \
+              --jq "map(select(.headSha == \"$HEAD_SHA\")) | first | .databaseId // empty")
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "No CI run found for the expected PR head" >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status --interval 15
+          current_base=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          if [[ "$current_base" != "$BASE_SHA" ]]; then
+            echo "main advanced during validation; rebase the PR and run CI again" >&2
+            exit 1
+          fi
+          # Refuse to merge if the head changed while CI was running.
+          # Strict required checks on main atomically guard against another
+          # merge between the base comparison above and this API request.
+          gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"
+          # Merges made with GITHUB_TOKEN do not trigger push workflows.
+          gh workflow run docker.yml --ref main

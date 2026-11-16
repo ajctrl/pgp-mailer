@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConfiguredIntake(t *testing.T) {
@@ -182,5 +184,52 @@ func TestSharedNamespaceConcurrentRequests(t *testing.T) {
 	defer e.srv.scopeMu.Unlock()
 	if len(e.srv.scopes) != 0 {
 		t.Fatal("scope lock leaked")
+	}
+}
+
+func TestEncryptionFailureDoesNotPersistOrConsumeDedup(t *testing.T) {
+	for _, route := range []string{"api", "signed", "raw"} {
+		t.Run(route, func(t *testing.T) {
+			e := setup(t, envOpts{})
+			if route == "raw" {
+				inputs, err := config.ParseInputs([]byte(`[{"path":"/raw","source":"raw","auth":"bearer","format":"text","dedup":"body"}]`))
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.srv.cfg.Inputs = inputs
+				e.h = e.srv.Handler()
+			}
+			send := func() resp {
+				switch route {
+				case "api":
+					return e.post(tokenA, "encryption-retry", validBody)
+				case "signed":
+					return e.grafana(firing, e.clock)
+				default:
+					return e.do("POST", "/raw", tokenA, nil, []byte("private raw message"))
+				}
+			}
+			before, err := e.st.Stats()
+			if err != nil {
+				t.Fatal(err)
+			}
+			encrypt := e.srv.builder.Encrypt
+			e.srv.builder.Encrypt = func(time.Time, []byte) ([]byte, string, error) {
+				return nil, "", errors.New("injected encryption failure")
+			}
+			expect(t, send(), 500, ErrTypeEncryptFailed)
+			after, err := e.st.Stats()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after != before || len(e.pending()) != 0 || e.woken != 0 {
+				t.Fatalf("failed encryption changed queue or woke delivery: before=%+v after=%+v wake=%d", before, after, e.woken)
+			}
+			e.srv.builder.Encrypt = encrypt
+			expect(t, send(), 202, "")
+			if len(e.pending()) != 1 || e.woken != 1 {
+				t.Fatal("retry was suppressed or not queued")
+			}
+		})
 	}
 }
