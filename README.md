@@ -60,14 +60,36 @@ publication workflow is dispatched. Unclassified updates remain manual.
 CI runs the full test suite with the race detector and requires GnuPG so the
 OpenPGP interoperability checks run. Regression tests also check encryption
 failure handling and reading/updating a frozen queue database written by bbolt
-v1.4.3. The merge workflow never checks out PR code and uses `GITHUB_TOKEN`;
-no additional secret or repository auto-merge setting is needed. Main must require
+v1.4.3. The merge workflow only checks out trusted automation from the base
+commit. It uses GITHUB_TOKEN except for updating PR branches, which requires
+the DEPENDABOT_UPDATE_TOKEN Actions secret described below. The repository's
+native auto-merge setting is not needed. Main must require
 the GitHub Actions `test` and `build` checks with strict (up-to-date branch)
 protection. This blocks merges validated against an older main, including races
-between concurrent update PRs. A stale PR must be rebased and pass CI again;
-Dependabot normally rebases conflicting/outdated PRs automatically. Additional
+between concurrent update PRs. If main advances, the automation updates the PR
+branch using the dedicated token, waits for normal pull_request test/build CI
+on its new head, then retries the merge (up to three attempts). Test failures, conflicts, unexpected
+head changes, or repeated main updates stop the process. Additional
 branch protection requirements still apply. See [Dependabot configuration](.github/dependabot.yml)
 and the [merge workflow](.github/workflows/dependabot-merge.yml).
+
+To enable automatic branch refresh, register an **Actions repository secret**
+named DEPENDABOT_UPDATE_TOKEN. Use a dedicated fine-grained personal access
+token restricted to this repository with Contents and Pull requests read/write
+permissions. Allow Workflows read/write as well for updates that change workflow
+files. A GitHub App installation token with equivalent permissions can also be
+supplied. Token-generated events use that token's actor, not Dependabot; the
+merge workflow ignores those events without cancelling the original run.
+
+The token is passed only to the branch-update API call in the trusted merge job;
+PR test/build jobs never receive it. If it is missing, an outdated PR stops before
+mutation and reports the required secret. Keep the token valid; expired tokens
+stop branch refresh. Unchanged, current PRs can still merge with GITHUB_TOKEN.
+
+GITHUB_TOKEN updates do not trigger pull_request CI, and workflow_dispatch CI
+cannot satisfy required PR checks. These constraints are why the extra token is
+required for branch refresh. See the [GitHub token documentation](https://docs.github.com/en/actions/concepts/security/github_token)
+and [required-check event restrictions](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#checks-from-some-workflow-jobs-are-not-evaluated).
 
 The initial main protection configuration is tracked in
 [main-protection.json](.github/main-protection.json). For a new repository, apply
