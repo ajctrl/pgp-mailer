@@ -1,0 +1,30 @@
+[
+  {
+    "path": "/v1/messages",
+    "source": "api",
+    "auth": "bearer",
+    "format": "json",
+    "validation": "message",
+    "dedup": "idempotency-key",
+    "dedup_namespace": ""
+  },
+  {
+    "path": "/webhooks/grafana",
+    "source": "grafana",
+    "auth": "hmac-sha256",
+    "secret_env": "GRAFANA_HMAC_SECRET",
+    "signature_header": "X-Grafana-Alerting-Signature",
+    "timestamp_header": "X-Grafana-Alerting-Timestamp",
+    "format": "json",
+    "require_any": [
+      "status",
+      "title",
+      "message"
+    ],
+    "title": "{{ $t := text .title | clean | cut 200 | trim }}{{ if $t }}{{ $t }}{{ else }}Grafana alert{{ if text .status }} ({{ text .status | clean | cut 32 }}){{ end }}{{ end }}",
+    "body": "{{ if text .message | trim }}{{ text .message }}{{ else }}(Grafana の Webhook に message がありませんでした){{ end }}",
+    "level": "{{ if eq (text .status) \"firing\" }}error{{ else if eq (text .status) \"resolved\" }}info{{ else }}unknown{{ end }}",
+    "dedup": "body",
+    "dedup_namespace": ""
+  }
+]

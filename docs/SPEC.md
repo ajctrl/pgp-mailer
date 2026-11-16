@@ -1,8 +1,10 @@
 # pgp-mailer initial specification
 
-A general-purpose PGP mail notification service built with Go and distroless. Grafana-specific handling is confined to an input adapter; encryption, the persistent queue and SMTP delivery are shared.
+A general-purpose PGP mail notification service built with Go and distroless. HTTP inputs use configurable routes and conversion rules; encryption, the persistent queue and SMTP delivery are shared.
 
-This document defines how the service behaves. How the implementation settles points it leaves open is described in [implementation-notes.md](implementation-notes.md).
+The [configurable intake extension](inputs.md) supersedes fixed-route and unconditional intake-secret requirements below. The original two routes remain the default presets.
+
+This document defines how the default configuration behaves. How the implementation settles points it leaves open is described in [implementation-notes.md](implementation-notes.md).
 
 ## Runtime environment and layout
 

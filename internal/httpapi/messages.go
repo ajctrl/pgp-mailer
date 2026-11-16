@@ -10,8 +10,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"pgp-mailer/internal/store"
 )
 
 // ReceiverOps is the only receiver of the initial version.
@@ -157,82 +155,4 @@ func validIdempotencyKey(k string) bool {
 		}
 	}
 	return true
-}
-
-func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
-	source, ok := s.caller(r)
-	if !ok {
-		s.reject(w, SourceUnauthenticated, http.StatusUnauthorized, ErrTypeUnauthorized, "missing or invalid bearer token")
-		return
-	}
-	if typ, msg, closed := s.unavailable(); closed {
-		s.reject(w, source, http.StatusServiceUnavailable, typ, msg)
-		return
-	}
-
-	keys := r.Header.Values("Idempotency-Key")
-	if len(keys) != 1 || !validIdempotencyKey(keys[0]) {
-		s.reject(w, source, http.StatusBadRequest, ErrTypeBadKey,
-			"exactly one Idempotency-Key header of 1 to 128 printable ASCII characters is required")
-		return
-	}
-	idemKey := keys[0]
-
-	body, tooLarge, err := readBody(w, r)
-	switch {
-	case tooLarge:
-		s.reject(w, source, http.StatusRequestEntityTooLarge, ErrTypeTooLarge, "request body exceeds 256 KiB")
-		return
-	case err != nil:
-		s.reject(w, source, http.StatusBadRequest, ErrTypeBadRequest, "could not read request body")
-		return
-	}
-	m, perr := ParseMessage(body)
-	if perr != nil {
-		s.reject(w, source, perr.status, perr.typ, perr.msg)
-		return
-	}
-	hash := m.ContentHash()
-
-	// The in-flight marker covers the window between the lookup and the
-	// commit, so two concurrent requests with one key cannot both enqueue.
-	flightKey := source + "\x00" + idemKey
-	s.inflightMu.Lock()
-	if _, busy := s.inflight[flightKey]; busy {
-		s.inflightMu.Unlock()
-		s.reject(w, source, http.StatusConflict, ErrTypeInProgress,
-			"an earlier request with this Idempotency-Key is still being processed; retry later with the same key")
-		return
-	}
-	s.inflight[flightKey] = struct{}{}
-	s.inflightMu.Unlock()
-	defer func() {
-		s.inflightMu.Lock()
-		delete(s.inflight, flightKey)
-		s.inflightMu.Unlock()
-	}()
-
-	prevID, prevHash, found, err := s.store.LookupIdem(source, idemKey, s.now())
-	if err != nil {
-		s.log.Error("queue read failed", "source", source, "result", "lookup_failed", "error", err.Error())
-		s.reject(w, source, http.StatusInternalServerError, ErrTypeInternal, "could not read de-duplication state")
-		return
-	}
-	if found {
-		if prevHash != hash {
-			s.reject(w, source, http.StatusConflict, ErrTypeConflict,
-				"this Idempotency-Key was already used with different content")
-			return
-		}
-		s.log.Info("duplicate suppressed", "id", prevID, "source", source, "receiver", m.Receiver, "level", m.Level, "result", "duplicate")
-		writeJSON(w, http.StatusAccepted, acceptedBody{ID: prevID})
-		return
-	}
-
-	id, err := s.accept(source, m, store.DedupIdem, store.IdemKey(source, idemKey), hash, nil)
-	if err != nil {
-		s.rejectAcceptError(w, source, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, acceptedBody{ID: id})
 }

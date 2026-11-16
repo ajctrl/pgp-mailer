@@ -68,10 +68,10 @@ type Server struct {
 
 	draining atomic.Bool
 
+	scopeMu    sync.Mutex
+	scopes     map[string]*intakeScope
 	inflightMu sync.Mutex
 	inflight   map[string]struct{}
-
-	grafanaMu sync.Mutex
 
 	healthMu   sync.Mutex
 	healthAt   time.Time
@@ -112,8 +112,14 @@ func (s *Server) Drain() { s.draining.Store(true) }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/messages", s.handleMessages)
-	mux.HandleFunc("POST /webhooks/grafana", s.handleGrafana)
+	inputs := s.cfg.Inputs
+	if inputs == nil {
+		inputs = config.DefaultInputs()
+		inputs[1].Secret = s.cfg.GrafanaHMACSecret
+	}
+	for _, input := range inputs {
+		mux.HandleFunc("POST "+input.Path, s.inputHandler(input))
+	}
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("GET /admin/v1/failed", s.admin(s.handleListFailed))

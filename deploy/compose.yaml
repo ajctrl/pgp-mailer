@@ -33,6 +33,7 @@ services:
       GRAFANA_HMAC_SECRET_FILE: /run/secrets/grafana_hmac_secret
       ADMIN_TOKEN_FILE: /run/secrets/admin_token
       QUEUE_DIR: /var/lib/pgp-mailer
+      # INPUTS_FILE: /etc/pgp-mailer/inputs.json # replaces default input routes
       # LISTEN_ADDR: ":8080"   # 既定値
     secrets:
       - smtp_password
@@ -40,6 +41,7 @@ services:
       - grafana_hmac_secret
       - admin_token
     volumes:
+      # - ./inputs.json:/etc/pgp-mailer/inputs.json:ro
       # 512 MiB 以上の空きを確保する（bbolt のファイルは削除しても縮まない）。
       - pgp-mailer-queue:/var/lib/pgp-mailer
     healthcheck:

@@ -2,6 +2,9 @@
 
 For a request example and the Grafana settings, see the [README](../README.md).
 
+Intake paths are configurable; examples assume default inputs. See
+[inputs.md](inputs.md) for custom paths, templates and authentication.
+
 ## Error responses
 
 A failed request is answered with `{"error":"<type>","message":"<description>"}`.

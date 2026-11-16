@@ -129,7 +129,12 @@ func serve() int {
 		log.Warn("quarantine applied", "fingerprints", cfg.QuarantineFingerprints, "moved", moved)
 	}
 
-	sources := []string{config.ReservedSource}
+	sources := []string{}
+	for _, input := range cfg.Inputs {
+		if input.Auth == "hmac-sha256" {
+			sources = append(sources, input.Source)
+		}
+	}
 	for _, t := range cfg.APITokens {
 		sources = append(sources, t.Name)
 	}

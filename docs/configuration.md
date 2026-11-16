@@ -1,6 +1,6 @@
 # Configuration
 
-The full list of environment variables and their meaning is in the Configuration section of [SPEC.md](SPEC.md). This page lists only what the implementation adds or makes more specific.
+The full list of environment variables and their meaning is in the Configuration section of [SPEC.md](SPEC.md). See [inputs.md](inputs.md) for INPUTS_FILE and conditional intake-secret requirements. This page lists only what the implementation adds or makes more specific.
 
 | Setting | How the implementation treats it |
 | --- | --- |
@@ -11,7 +11,7 @@ The full list of environment variables and their meaning is in the Configuration
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | Required. Relays without authentication are not supported. Authentication uses PLAIN, or LOGIN if PLAIN is not offered |
 | `MAIL_FROM` / `RECEIVER_OPS` | One address each. The `Name <addr>` form is allowed |
 | `ADMIN_TOKEN` | At least 32 characters, and different from every token in `API_TOKENS` |
-| `GRAFANA_HMAC_SECRET` | At least 32 characters |
+| `GRAFANA_HMAC_SECRET` | At least 32 characters; required when referenced by an HMAC input |
 | Secret values | A value from an environment variable is used as is; leading and trailing spaces are part of it. From a `*_FILE` file, only the trailing line break is removed |
 
 The public key and fingerprint can be prepared like this:

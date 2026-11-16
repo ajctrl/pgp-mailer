@@ -16,6 +16,7 @@ Other apps ─ HTTP + Bearer ─┘
 | Document | Contents |
 | --- | --- |
 | [docs/SPEC.md](docs/SPEC.md) | Specification |
+| [docs/inputs.md](docs/inputs.md) | Configurable HTTP routes, authentication and templates |
 | [docs/configuration.md](docs/configuration.md) | Notes on settings, preparing the key and fingerprint |
 | [docs/api.md](docs/api.md) | Error responses, admin API |
 | [docs/operations.md](docs/operations.md) | Key replacement, expiry, emergency revocation, startup failures, logs |
@@ -64,6 +65,10 @@ An example Portainer stack is in [deploy/compose.yaml](deploy/compose.yaml).
 | `pgp-mailer admin ...` | Call the admin API ([docs/api.md](docs/api.md)) |
 
 ## Usage
+
+All intake routes are configuration-defined. Set INPUTS_FILE to a JSON file to
+replace, rename or add routes without rebuilding. When unset, the embedded
+defaults provide the two routes below. See [configurable inputs](docs/inputs.md).
 
 ```sh
 curl -sS -X POST http://pgp-mailer:8080/v1/messages \

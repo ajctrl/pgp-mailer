@@ -33,6 +33,7 @@ type Token struct {
 
 type Config struct {
 	ListenAddr string
+	Inputs     []Input
 
 	PublicKeyBase64        string
 	Fingerprint            string   // upper-case hex, no spaces
@@ -117,18 +118,58 @@ func Load(getenv func(string) string) (*Config, error) {
 	c.MailFrom = l.address("MAIL_FROM")
 	c.ReceiverOps = l.address("RECEIVER_OPS")
 
-	if raw := l.secret("API_TOKENS"); raw != "" {
-		tokens, err := parseTokens(raw)
+	c.Inputs = DefaultInputs()
+	if file := strings.TrimSpace(getenv("INPUTS_FILE")); file != "" {
+		raw, err := os.ReadFile(file)
 		if err != nil {
-			l.fail("API_TOKENS: %v", err)
+			l.fail("INPUTS_FILE: cannot read file")
+		} else {
+			inputs, err := ParseInputs(raw)
+			if err != nil {
+				l.fail("INPUTS_FILE: %v", err)
+			} else {
+				c.Inputs = inputs
+			}
 		}
-		c.APITokens = tokens
 	}
-	if s := l.secret("GRAFANA_HMAC_SECRET"); s != "" {
-		if len(s) < MinTokenLength {
-			l.fail("GRAFANA_HMAC_SECRET must be at least %d characters", MinTokenLength)
+	needsBearer := false
+	for _, input := range c.Inputs {
+		if input.Auth == "bearer" {
+			needsBearer = true
 		}
-		c.GrafanaHMACSecret = []byte(s)
+	}
+	if needsBearer {
+		if raw := l.secret("API_TOKENS"); raw != "" {
+			tokens, err := parseTokens(raw)
+			if err != nil {
+				l.fail("API_TOKENS: %v", err)
+			}
+			c.APITokens = tokens
+		}
+	}
+	for i := range c.Inputs {
+		input := &c.Inputs[i]
+		if input.Auth == "hmac-sha256" {
+			secret := l.secret(input.SecretEnv)
+			if len(secret) < MinTokenLength {
+				l.fail("%s must be at least %d characters", input.SecretEnv, MinTokenLength)
+			}
+			input.Secret = []byte(secret)
+			if input.SecretEnv == "GRAFANA_HMAC_SECRET" {
+				c.GrafanaHMACSecret = input.Secret
+			}
+		}
+		if input.Caller != "" {
+			found := false
+			for _, t := range c.APITokens {
+				if t.Name == input.Caller {
+					found = true
+				}
+			}
+			if input.Auth != "bearer" || !found {
+				l.fail("input %s: caller must name an API_TOKENS entry", input.Path)
+			}
+		}
 	}
 	if s := l.secret("ADMIN_TOKEN"); s != "" {
 		if err := checkToken(s); err != nil {
