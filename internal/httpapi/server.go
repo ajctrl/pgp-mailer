@@ -233,14 +233,15 @@ var (
 // accept encrypts the notification and persists mail, queue entry and
 // de-duplication record in one transaction. It returns only after the
 // commit; nothing is ever stored or sent in plaintext.
-func (s *Server) accept(source string, m *Message, dedupKind string, dedupKey []byte, contentHash [32]byte, replay *store.Replay) (string, error) {
+func (s *Server) accept(source, publicSubject string, m *Message, dedupKind string, dedupKey []byte, contentHash [32]byte, replay *store.Replay) (string, error) {
 	now := s.now()
 	id, err := newID()
 	if err != nil {
 		return "", err
 	}
 	built, err := s.builder.Build(mailmsg.Input{
-		ID: id, Source: source, Title: m.Title, Message: m.Message, Level: m.Level, Now: now,
+		PublicSubject: publicSubject,
+		ID:            id, Source: source, Title: m.Title, Message: m.Message, Level: m.Level, Now: now,
 	})
 	if err != nil {
 		if errors.Is(err, pgpkey.ErrExpired) {

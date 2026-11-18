@@ -22,7 +22,7 @@ import (
 func TestConfiguredIntake(t *testing.T) {
 	e := setup(t, envOpts{})
 	inputs, err := config.ParseInputs([]byte(`[
- {"path":"/hooks/alerts","source":"alerts","auth":"bearer","caller":"app-a","format":"json","dedup":"body","title":"{{ (index . 0).labels.alertname }}","body":"{{ toPrettyJSON . }}"},
+ {"path":"/hooks/alerts","source":"alerts","auth":"bearer","caller":"app-a","format":"json","dedup":"body","public_subject":"[監視] 通知","title":"{{ (index . 0).labels.alertname }}","body":"{{ toPrettyJSON . }}"},
  {"path":"/hooks/raw","source":"raw","auth":"bearer","format":"text","dedup":"none"},
  {"path":"/hooks/other","source":"other","auth":"bearer","format":"json","dedup":"body"}
  ]`))
@@ -60,7 +60,15 @@ func TestConfiguredIntake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(raw, []byte("PrivateDetail")) {
+	outer, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, err := new(mime.WordDecoder).DecodeHeader(outer.Header.Get("Subject"))
+	if err != nil || public != "[監視] 通知" {
+		t.Fatalf("public subject = %q, err = %v", public, err)
+	}
+	if bytes.Contains(raw, []byte("Private")) {
 		t.Fatal("plaintext persisted")
 	}
 	start := bytes.Index(raw, []byte("-----BEGIN PGP MESSAGE-----"))

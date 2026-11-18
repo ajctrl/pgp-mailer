@@ -28,6 +28,7 @@ are required only when referenced by an input.
     "auth": "bearer",
     "caller": "app-a",
     "format": "json",
+    "public_subject": "[Monitoring] Notification",
     "title": "{{ .event.name }}",
     "body": "{{ .event.description }}\n\n{{ toPrettyJSON . }}",
     "level": "info",
@@ -66,6 +67,7 @@ curl http://pgp-mailer:8080/hooks/raw \
 | `format` | `json` accepts any JSON value including arrays; `text` accepts UTF-8 text |
 | `validation` | Optional `message` validates original JSON against the existing receiver/title/message/level API contract; cannot combine with templates or require_any |
 | `require_any` | Optional top-level JSON field names; at least one must be non-null and nonblank |
+| `public_subject` | Optional literal subject visible to mail servers before decryption. Up to 200 characters on one line, without control characters. Omitted or blank uses `[pgp-mailer] encrypted notification`. Works with all validation modes. |
 | `title`, `body`, `level` | Go text templates; defaults are source, original request body, and info |
 | `dedup_namespace` | Optional stable scope instead of path; empty retains historical caller-only keys. Shared scopes intentionally share suppression |
 | `dedup` | Required: `idempotency-key`, `body`, or `none` |

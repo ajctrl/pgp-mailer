@@ -220,7 +220,7 @@ func (s *Server) inputHandler(input config.Input) http.HandlerFunc {
 			writeJSON(w, 202, acceptedBody{ID: id})
 			return
 		}
-		id, err = s.accept(source, m, kind, dedupKey, hash, replay)
+		id, err = s.accept(source, input.PublicSubject, m, kind, dedupKey, hash, replay)
 		if err != nil {
 			s.rejectAcceptError(w, source, err)
 			return

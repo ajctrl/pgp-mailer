@@ -35,6 +35,8 @@ func TestInputsReplaceDefaults(t *testing.T) {
 func TestInvalidInputs(t *testing.T) {
 	valid := `[{"path":"/hooks/test","source":"test","auth":"bearer","format":"json","dedup":"body","title":"hello"}]`
 	for _, raw := range []string{
+		strings.Replace(valid, `"title":"hello"`, `"public_subject":"notify\r\nFrom: other"`, 1),
+		strings.Replace(valid, `"title":"hello"`, `"public_subject":"`+strings.Repeat("件", 201)+`"`, 1),
 		"null", valid + " {}", strings.Replace(valid, "hello", "{{", 1),
 		strings.Replace(valid, "/hooks/test", "/metrics", 1),
 		strings.Replace(valid, "/hooks/test", "/hooks/{id}", 1),

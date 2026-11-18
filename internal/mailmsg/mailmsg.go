@@ -1,5 +1,5 @@
 // Package mailmsg builds PGP/MIME (RFC 3156) messages with protected
-// headers. Only the fixed outer subject, addresses, Date and Message-ID
+// headers. Only the configured outer subject, addresses, Date and Message-ID
 // are left in the clear.
 package mailmsg
 
@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-// OuterSubject is the fixed, unprotected subject of every message.
+// OuterSubject is the default unprotected subject.
 const OuterSubject = "[pgp-mailer] encrypted notification"
 
 // EncryptFunc encrypts plaintext into an ASCII-armored OpenPGP message and
@@ -30,12 +30,13 @@ type Builder struct {
 
 // Input is one validated notification.
 type Input struct {
-	ID      string // acceptance ID; becomes the local part of the Message-ID
-	Source  string
-	Title   string
-	Message string
-	Level   string
-	Now     time.Time // acceptance time; fixes Date for all later resends
+	ID            string // acceptance ID; becomes the local part of the Message-ID
+	Source        string
+	PublicSubject string // route configuration, visible before decryption
+	Title         string
+	Message       string
+	Level         string
+	Now           time.Time // acceptance time; fixes Date for all later resends
 }
 
 // Built is a complete RFC 5322 message ready for SMTP DATA.
@@ -84,7 +85,11 @@ func (b *Builder) Build(in Input) (*Built, error) {
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "From: %s\r\n", from)
 	fmt.Fprintf(&out, "To: %s\r\n", to)
-	fmt.Fprintf(&out, "Subject: %s\r\n", OuterSubject)
+	publicSubject := in.PublicSubject
+	if publicSubject == "" {
+		publicSubject = OuterSubject
+	}
+	fmt.Fprintf(&out, "Subject: %s\r\n", encodeHeader(publicSubject, len("Subject: ")))
 	fmt.Fprintf(&out, "Date: %s\r\n", date)
 	fmt.Fprintf(&out, "Message-ID: %s\r\n", messageID)
 	out.WriteString("MIME-Version: 1.0\r\n")

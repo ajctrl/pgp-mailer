@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 	"unicode"
+	"unicode/utf8"
 )
 
 //go:embed inputs.default.json
@@ -27,6 +28,7 @@ type Input struct {
 	Caller          string                `json:"caller,omitempty"`
 	Format          string                `json:"format"`
 	Validation      string                `json:"validation,omitempty"`
+	PublicSubject   string                `json:"public_subject,omitempty"`
 	RequireAny      []string              `json:"require_any,omitempty"`
 	Title           string                `json:"title,omitempty"`
 	Body            string                `json:"body,omitempty"`
@@ -105,6 +107,10 @@ func ParseInputs(raw []byte) ([]Input, error) {
 		if p.Format != "json" && p.Format != "text" {
 			return nil, fmt.Errorf("input %d: format must be json or text", i)
 		}
+		if strings.IndexFunc(p.PublicSubject, unicode.IsControl) >= 0 || strings.ContainsAny(p.PublicSubject, "\u2028\u2029") || utf8.RuneCountInString(p.PublicSubject) > 200 {
+			return nil, fmt.Errorf("input %d: public_subject must be one line of at most 200 characters without control characters", i)
+		}
+		p.PublicSubject = strings.TrimSpace(p.PublicSubject)
 		if p.Validation != "" && p.Validation != "message" {
 			return nil, fmt.Errorf("input %d: unsupported validation", i)
 		}

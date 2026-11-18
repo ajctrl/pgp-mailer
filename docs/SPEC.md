@@ -125,7 +125,7 @@ Revocation information is verified as contained in the loaded public key; new re
 
 ## Mail and delivery
 
-- PGP/MIME is used, with a fixed outer subject. The original subject and body go inside the encrypted part.
+- PGP/MIME is used, with a static outer subject configurable per input. The original subject and body go inside the encrypted part.
 - Outer headers such as recipient and sender are in plaintext.
 - The outer `Message-ID` and `Date` are generated at acceptance, stored in the queue, and reused on every resend.
 - SMTP uses implicit TLS or mandatory STARTTLS, with certificate verification.
@@ -251,7 +251,7 @@ Missing or invalid settings make startup fail.
 ### MIME structure and subject protection
 
 - The outer part is PGP/MIME (RFC 3156) `multipart/encrypted; protocol="application/pgp-encrypted"`.
-- The outer subject is fixed as `[pgp-mailer] encrypted notification`.
+- The outer subject defaults to `[pgp-mailer] encrypted notification`. Set `public_subject` in an `INPUTS_FILE` route to override it for new messages on that route.
 - The encrypted part contains `multipart/mixed; protected-headers="v1"` with the headers `Subject`, `From`, `To`, `Date` and `Message-ID` and a single `text/plain; charset=utf-8` body.
 - Messages are not signed (the server holds no secret key). The receiving side cannot verify the sender's authenticity through PGP.
 - Compatibility is checked against Thunderbird (latest stable desktop release). The receiving side confirms the following:
