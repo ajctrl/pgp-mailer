@@ -37,6 +37,23 @@ type Input struct {
 	DedupNamespace  *string               `json:"dedup_namespace,omitempty"`
 	Secret          []byte                `json:"-"`
 	Templates       [3]*template.Template `json:"-"`
+
+	ProtectedSubjectTemplate string `json:"protected_subject_template,omitempty"`
+	protectedSubject         *template.Template
+}
+
+// DefaultProtectedSubject is used for omitted templates and as the rendering fallback.
+func DefaultProtectedSubject(level, title string) string {
+	return "[" + level + "] " + title
+}
+
+// WriteProtectedSubject formats the subject using only validated notification fields.
+func (in *Input) WriteProtectedSubject(w io.Writer, level, title string) error {
+	if in.protectedSubject == nil {
+		_, err := io.WriteString(w, DefaultProtectedSubject(level, title))
+		return err
+	}
+	return in.protectedSubject.Execute(w, struct{ Level, Title string }{Level: level, Title: title})
 }
 
 func TemplateFuncs() template.FuncMap {
@@ -111,6 +128,13 @@ func ParseInputs(raw []byte) ([]Input, error) {
 			return nil, fmt.Errorf("input %d: public_subject must be one line of at most 200 characters without control characters", i)
 		}
 		p.PublicSubject = strings.TrimSpace(p.PublicSubject)
+		if p.ProtectedSubjectTemplate != "" {
+			t, err := parseSubjectTemplate(p.ProtectedSubjectTemplate)
+			if err != nil {
+				return nil, fmt.Errorf("input %d: protected_subject_template: %w", i, err)
+			}
+			p.protectedSubject = t
+		}
 		if p.Validation != "" && p.Validation != "message" {
 			return nil, fmt.Errorf("input %d: unsupported validation", i)
 		}

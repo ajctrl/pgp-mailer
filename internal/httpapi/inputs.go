@@ -220,7 +220,14 @@ func (s *Server) inputHandler(input config.Input) http.HandlerFunc {
 			writeJSON(w, 202, acceptedBody{ID: id})
 			return
 		}
-		id, err = s.accept(source, input.PublicSubject, m, kind, dedupKey, hash, replay)
+		var subject boundedBuffer
+		renderErr := input.WriteProtectedSubject(&subject, m.Level, m.Title)
+		protectedSubject := subject.String()
+		if renderErr != nil || strings.TrimSpace(protectedSubject) == "" || !utf8.ValidString(protectedSubject) || strings.IndexFunc(protectedSubject, isLineBreakOrControl) >= 0 {
+			protectedSubject = config.DefaultProtectedSubject(m.Level, m.Title)
+			s.log.Warn("using default protected subject", "source", source)
+		}
+		id, err = s.accept(source, input.PublicSubject, protectedSubject, m, kind, dedupKey, hash, replay)
 		if err != nil {
 			s.rejectAcceptError(w, source, err)
 			return

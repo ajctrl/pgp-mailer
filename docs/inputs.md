@@ -65,8 +65,9 @@ curl http://pgp-mailer:8080/hooks/raw \
 | `secret_env` | HMAC secret environment variable name; its `_FILE` variant also works |
 | `signature_header`, `timestamp_header` | Required distinct header names for HMAC |
 | `format` | `json` accepts any JSON value including arrays; `text` accepts UTF-8 text |
-| `validation` | Optional `message` validates original JSON against the existing receiver/title/message/level API contract; cannot combine with templates or require_any |
+| `validation` | Optional `message` validates original JSON against the existing receiver/title/message/level API contract; cannot combine with `title`, `body`, `level` or `require_any` |
 | `require_any` | Optional top-level JSON field names; at least one must be non-null and nonblank |
+| `protected_subject_template` | Optional format for the encrypted subject on any route. Omitted or empty uses `[level] title`. |
 | `public_subject` | Optional literal subject visible to mail servers before decryption. Up to 200 characters on one line, without control characters. Omitted or blank uses `[pgp-mailer] encrypted notification`. Works with all validation modes. |
 | `title`, `body`, `level` | Go text templates; defaults are source, original request body, and info |
 | `dedup_namespace` | Optional stable scope instead of path; empty retains historical caller-only keys. Shared scopes intentionally share suppression |
@@ -76,7 +77,19 @@ curl http://pgp-mailer:8080/hooks/raw \
 unknown fields and requiring `receiver: "ops"`. Other inputs always deliver to
 configured `RECEIVER_OPS`. Payloads cannot select arbitrary email addresses.
 
-Template data is the decoded JSON value, or text string. JSON numbers preserve
+In a protected subject, `{{.Title}}` inserts the validated title and `{{.Level}}`
+inserts the level. Use `{{.Level | upper}}` for uppercase or `{{.Level | lower}}`
+for lowercase.
+You can combine these placeholders with literal text. Spaces inside the braces
+and around the pipe are optional.
+For example, `{{ .Level | upper }}: {{ .Title }}` renders `ERROR: Database connection failed`.
+
+The format must fit on one line and contain no control characters. Whitespace-only
+formats, unmatched double braces, and unsupported expressions cause a startup error.
+If the expanded subject exceeds 256 KiB, the mailer queues the notification
+with the default encrypted subject.
+
+For the `title`, `body` and `level` templates, data is the decoded JSON value, or text string. JSON numbers preserve
 precision. Standard Go template operations (if, range, index) work, plus:
 
 - `toPrettyJSON`: indented JSON.

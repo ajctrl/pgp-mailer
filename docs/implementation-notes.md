@@ -6,7 +6,7 @@ How the implementation settles points that [SPEC.md](SPEC.md) leaves open.
 
 | Topic | Implementation |
 | --- | --- |
-| How `level` appears inside the encrypted part | The protected subject reads `[error] original title`. One line with the acceptance ID, caller and `level` is appended to the body |
+| How `level` appears inside the encrypted part | By default the protected subject reads `[error] original title`. One line with the acceptance ID, caller and `level` is appended to the body |
 | Characters forbidden in `title` | Besides line breaks, every control character (tab included) and U+2028 / U+2029 are rejected |
 | Unknown JSON fields | `422`, so that a field meant to set, say, a recipient is not silently ignored. Key names must match exactly, including case (`Title` is an unknown field) |
 | Resent requests in delivery-only mode | `503` even for a key that was already accepted ("`503` after authentication" applied as written) |

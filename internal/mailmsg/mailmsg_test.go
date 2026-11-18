@@ -69,7 +69,7 @@ func TestBuildStructureAndProtectedHeaders(t *testing.T) {
 	message := "直近5分でエラーが15件発生しました。\nline2\r\nline3\n" + strings.Repeat("x", 2000)
 	built, tk := build(t, Input{
 		ID: "0123456789abcdef0123456789abcdef", Source: "app-1",
-		Title: title, Message: message, Level: "error", Now: now,
+		ProtectedSubject: "[error] " + title, Message: message, Level: "error", Now: now,
 	})
 
 	// Wire format: CRLF only, no over-long lines, nothing sensitive outside.
@@ -167,7 +167,7 @@ func TestEncryptFailureFailsBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := &Builder{From: &mail.Address{Address: "a@example.com"}, To: &mail.Address{Address: "b@example.com"}, Encrypt: key.Encrypt}
-	if built, err := b.Build(Input{ID: "id", Title: "t", Message: "m", Level: "info", Now: now}); err == nil || built != nil {
+	if built, err := b.Build(Input{ID: "id", ProtectedSubject: "t", Message: "m", Level: "info", Now: now}); err == nil || built != nil {
 		t.Fatalf("Build with an expired key returned %v, %v", built, err)
 	}
 }
@@ -233,7 +233,7 @@ func TestGnuPGInterop(t *testing.T) {
 			t.Errorf("%s: 1y key reports no expiry", algo)
 		}
 		b := &Builder{From: &mail.Address{Address: "mailer@example.com"}, To: &mail.Address{Address: uid}, Encrypt: key.Encrypt}
-		built, err := b.Build(Input{ID: "abc", Source: "app", Title: "日本語の件名", Message: "日本語の本文", Level: "warn", Now: at})
+		built, err := b.Build(Input{ID: "abc", Source: "app", ProtectedSubject: "[warn] 日本語の件名", Message: "日本語の本文", Level: "warn", Now: at})
 		if err != nil {
 			t.Fatalf("%s: Build: %v", algo, err)
 		}

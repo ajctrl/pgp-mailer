@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -22,7 +23,7 @@ import (
 func TestConfiguredIntake(t *testing.T) {
 	e := setup(t, envOpts{})
 	inputs, err := config.ParseInputs([]byte(`[
- {"path":"/hooks/alerts","source":"alerts","auth":"bearer","caller":"app-a","format":"json","dedup":"body","public_subject":"[監視] 通知","title":"{{ (index . 0).labels.alertname }}","body":"{{ toPrettyJSON . }}"},
+ {"path":"/hooks/alerts","source":"alerts","auth":"bearer","caller":"app-a","format":"json","dedup":"body","public_subject":"[監視] 通知","protected_subject_template":"{{ .Level | upper }}: {{ .Title }}","title":"{{ (index . 0).labels.alertname }}","body":"{{ toPrettyJSON . }}"},
  {"path":"/hooks/raw","source":"raw","auth":"bearer","format":"text","dedup":"none"},
  {"path":"/hooks/other","source":"other","auth":"bearer","format":"json","dedup":"body"}
  ]`))
@@ -71,17 +72,7 @@ func TestConfiguredIntake(t *testing.T) {
 	if bytes.Contains(raw, []byte("Private")) {
 		t.Fatal("plaintext persisted")
 	}
-	start := bytes.Index(raw, []byte("-----BEGIN PGP MESSAGE-----"))
-	end := bytes.Index(raw, []byte("-----END PGP MESSAGE-----"))
-	plain, err := e.tk.Decrypt(raw[start:end+len("-----END PGP MESSAGE-----")], e.clock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	inner, err := mail.ReadMessage(bytes.NewReader(plain))
-	if err != nil {
-		t.Fatal(err)
-	}
+	inner := decryptQueuedMail(t, e, raw)
 	subject, err := new(mime.WordDecoder).DecodeHeader(inner.Header.Get("Subject"))
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +89,7 @@ func TestConfiguredIntake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if subject != "[info] PrivateAlert" || !bytes.Contains(decoded, []byte("PrivateDetail")) {
+	if subject != "INFO: PrivateAlert" || !bytes.Contains(decoded, []byte("PrivateDetail")) {
 		t.Fatal("missing rendered content")
 	}
 
@@ -240,4 +231,51 @@ func TestEncryptionFailureDoesNotPersistOrConsumeDedup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOversizeProtectedSubjectFallsBack(t *testing.T) {
+	e := setup(t, envOpts{})
+	// Each placeholder expands to 200 bytes for this notification.
+	format := strings.Repeat("{{.Title}}", MaxBodyBytes/MaxTitleRunes+1)
+	rawConfig, err := json.Marshal([]config.Input{{Path: "/notify", Source: "api", Auth: "bearer", Format: "json", Validation: "message", Dedup: "none", ProtectedSubjectTemplate: format}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.srv.cfg.Inputs, err = config.ParseInputs(rawConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.h = e.srv.Handler()
+	title := strings.Repeat("x", MaxTitleRunes)
+	body := []byte(`{"receiver":"ops","message":"notice","title":"` + title + `","level":"error"}`)
+	resp := e.do("POST", "/notify", tokenA, nil, body)
+	expect(t, resp, 202, "")
+	raw, err := e.st.Mail(resp.id())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := decryptQueuedMail(t, e, raw)
+	subject, err := new(mime.WordDecoder).DecodeHeader(inner.Header.Get("Subject"))
+	if err != nil || subject != "[error] "+title {
+		t.Fatalf("protected subject = %q, err = %v", subject, err)
+	}
+}
+
+func decryptQueuedMail(t *testing.T, e *env, raw []byte) *mail.Message {
+	t.Helper()
+	start := bytes.Index(raw, []byte("-----BEGIN PGP MESSAGE-----"))
+	end := bytes.Index(raw, []byte("-----END PGP MESSAGE-----"))
+	if start < 0 || end < start {
+		t.Fatal("missing encrypted mail")
+	}
+	plain, err := e.tk.Decrypt(raw[start:end+len("-----END PGP MESSAGE-----")], e.clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inner, err := mail.ReadMessage(bytes.NewReader(plain))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return inner
 }

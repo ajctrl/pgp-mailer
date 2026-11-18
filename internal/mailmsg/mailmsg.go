@@ -30,13 +30,13 @@ type Builder struct {
 
 // Input is one validated notification.
 type Input struct {
-	ID            string // acceptance ID; becomes the local part of the Message-ID
-	Source        string
-	PublicSubject string // route configuration, visible before decryption
-	Title         string
-	Message       string
-	Level         string
-	Now           time.Time // acceptance time; fixes Date for all later resends
+	ID               string // acceptance ID; becomes the local part of the Message-ID
+	Source           string
+	PublicSubject    string // route configuration, visible before decryption
+	ProtectedSubject string
+	Message          string
+	Level            string
+	Now              time.Time // acceptance time; fixes Date for all later resends
 }
 
 // Built is a complete RFC 5322 message ready for SMTP DATA.
@@ -59,7 +59,7 @@ func (b *Builder) Build(in Input) (*Built, error) {
 	}
 	var inner bytes.Buffer
 	fmt.Fprintf(&inner, "Content-Type: multipart/mixed; boundary=\"%s\";\r\n protected-headers=\"v1\"\r\n", innerBoundary)
-	fmt.Fprintf(&inner, "Subject: %s\r\n", encodeHeader("["+in.Level+"] "+in.Title, len("Subject: ")))
+	fmt.Fprintf(&inner, "Subject: %s\r\n", encodeHeader(in.ProtectedSubject, len("Subject: ")))
 	fmt.Fprintf(&inner, "From: %s\r\n", from)
 	fmt.Fprintf(&inner, "To: %s\r\n", to)
 	fmt.Fprintf(&inner, "Date: %s\r\n", date)
